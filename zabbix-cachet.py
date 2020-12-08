@@ -159,6 +159,17 @@ class Zabbix:
             service_tree = service_tree + singers_services
         return service_tree
 
+    @pyzabbix_safe({})
+    def get_service(self, serviceid):
+        """
+        Get service information
+        @param serviceid: string
+        @return: dict of data
+        """
+        service = self.zapi.service.get(
+            selectTrigger='extend',
+            serviceids=serviceid)
+        return service[0]
 
 class Cachet:
     def __init__(self, server, token, verify=True):
@@ -399,7 +410,7 @@ class Cachet:
         if components_gr_id['id'] == 0:
             url = 'components/groups'
             # TODO: make if possible to configure default collapsed value
-            params = {'name': name, 'collapsed': 2}
+            params = {'name': name, 'collapsed': 2, 'visible': 1}
             logging.debug('Creating Component Group {}...'.format(params['name']))
             data = self._http_post(url, params)
             if 'data' in data:
@@ -540,7 +551,7 @@ def triggers_watcher(service_map):
                             ack_time=ack_time,
                             author=author
                         )
-                        if ack_msg not in inc_msg:
+                        if ack_msg not in inc_msg and msg['message'] != 'SERVICE - auto acknowledged':
                             inc_msg = ack_msg + inc_msg
                 else:
                     inc_status = 1
@@ -590,9 +601,31 @@ def triggers_watcher(service_map):
                                             component_status=comp_status)
 
         else:
-            # TODO: ServiceID
-            # inc_msg = 'TODO: ServiceID'
-            continue
+            service = zapi.get_service(i['serviceid'])
+            # Check if Zabbix return service
+            if 'status' not in service:
+                logging.error('Cannot get status for service {}'.format(i['serviceid']))
+                continue
+            # Check if incident already registered
+            # Service in OK state
+            if str(service['status']) == '0':
+                component_status = cachet.get_component(i['component_id'])['data']['status']
+                # And component in operational mode
+                if str(component_status) == '1':
+                    continue
+                else:
+                    # And component not operational mode
+                    cachet.upd_components(i['component_id'], status=1)
+                    continue
+            # Service not in OK status
+            elif service['status'] > '1':
+                if int(service['status']) >= 4:
+                    comp_status = 4
+                elif int(service['status']) == 3:
+                    comp_status = 3
+                else:
+                    comp_status = 2
+                cachet.upd_components(i['component_id'], status=comp_status)
 
     return True
 
