@@ -168,6 +168,7 @@ class Zabbix:
         """
         service = self.zapi.service.get(
             selectTrigger='extend',
+            selectDependencies='extend',
             serviceids=serviceid)
         return service[0]
 
@@ -447,7 +448,7 @@ class Cachet:
                         component_id, component_status
         @return: dict of data
         """
-        params = {'visible': 1, 'notify': 'true'}
+        params = {'visible': 1, 'notify': 1}
         url = 'incidents'
         params.update(kwargs)
         data = self._http_post(url, params)
@@ -542,6 +543,9 @@ def triggers_watcher(service_map):
                 if zbx_event.get('acknowledged', '0') == '1':
                     inc_status = 2
                     for msg in zbx_event['acknowledges']:
+                        if msg['message'] == 'SERVICE - auto acknowledged':
+                            inc_status = 1
+                            break
                         # TODO: Add timezone?
                         #       Move format to config file
                         author = msg.get('name', '') + ' ' + msg.get('surname', '')
@@ -551,7 +555,7 @@ def triggers_watcher(service_map):
                             ack_time=ack_time,
                             author=author
                         )
-                        if ack_msg not in inc_msg and msg['message'] != 'SERVICE - auto acknowledged':
+                        if ack_msg not in inc_msg:
                             inc_msg = ack_msg + inc_msg
                 else:
                     inc_status = 1
@@ -615,18 +619,118 @@ def triggers_watcher(service_map):
                     continue
                 else:
                     # And component not operational mode
-                    cachet.upd_components(i['component_id'], status=1)
+                    last_inc = cachet.get_incident(i['component_id'])
+                    if str(last_inc['id']) != '0':
+                        if resolving_tmpl:
+                            inc_msg = resolving_tmpl.format(time=datetime.datetime.now(tz=tz).strftime('%b %d, %H:%M'),
+                                                            ) + cachet.get_incident(i['component_id'])['message']
+                        else:
+                            inc_msg = cachet.get_incident(i['component_id'])['message']
+                        cachet.upd_incident(last_inc['id'],
+                                            status=4,
+                                            component_id=i['component_id'],
+                                            component_status=1,
+                                            message=inc_msg)
+                    # Incident does not exist. Just change component status
+                    else:
+                        cachet.upd_components(i['component_id'], status=1)
                     continue
             # Service not in OK status
             elif service['status'] > '1':
-                if int(service['status']) >= 4:
-                    comp_status = 4
-                elif int(service['status']) == 3:
-                    comp_status = 3
-                else:
-                    comp_status = 2
-                cachet.upd_components(i['component_id'], status=comp_status)
+                child_services_ids = []
+                for dependency in service['dependencies']:
+                    child_services_ids.append(dependency['serviceid'])
+                child_services = zapi.zapi.service.get(
+                    selectTrigger='extend',
+                    serviceids=child_services_ids)
 
+                incident_service = False
+                for child_service in child_services:
+                    if int(child_service['status']) > 1 and child_service['trigger']:
+                        trigger = zapi.get_trigger(child_service['triggerid'])
+                        zbx_event = zapi.get_event(child_service['triggerid'])
+                        inc_name = service['name']
+                        if not zbx_event:
+                            logging.warning('Failed to get zabbix event for trigger {}'.format(child_service['triggerid']))
+                            # Mock zbx_event for further usage
+                            zbx_event = {'acknowledged': '0',
+                                         }
+                        if zbx_event.get('acknowledged', '0') == '1':
+                            inc_status = 2
+                            for msg in zbx_event['acknowledges']:
+                                if msg['message'] == 'SERVICE - auto acknowledged':
+                                    inc_status = 1
+                                    break
+                                # TODO: Add timezone?
+                                #       Move format to config file
+                                author = msg.get('name', '') + ' ' + msg.get('surname', '')
+                                ack_time = datetime.datetime.fromtimestamp(int(msg['clock']), tz=tz).strftime('%b %d, %H:%M')
+                                ack_msg = acknowledgement_tmpl.format(
+                                    message=msg['message'],
+                                    ack_time=ack_time,
+                                    author=author
+                                )
+                                if ack_msg not in inc_msg:
+                                    inc_msg = ack_msg + inc_msg
+                        else:
+                            inc_status = 1
+
+                        if int(service['status']) >= 4:
+                            comp_status = 4
+                        elif int(service['status']) == 3:
+                            comp_status = 3
+                        else:
+                            comp_status = 2
+
+                        if not inc_msg and investigating_tmpl:
+                            if zbx_event:
+                                zbx_event_clock = int(zbx_event.get('clock'))
+                                zbx_event_time = datetime.datetime.fromtimestamp(zbx_event_clock, tz=tz).strftime(
+                                    '%b %d, %H:%M')
+                            else:
+                                zbx_event_time = ''
+                            inc_msg = investigating_tmpl.format(
+                                group=i.get('group_name', ''),
+                                component=i.get('component_name', ''),
+                                time=zbx_event_time,
+                                trigger_description=trigger.get('comments', ''),
+                                trigger_name=trigger.get('description', ''),
+                            )
+
+                        if not inc_msg and trigger.get('comments'):
+                            inc_msg = trigger.get('comments')
+                        elif not inc_msg:
+                            inc_msg = trigger.get('description')
+
+                        if 'group_name' in i:
+                            inc_name = i.get('group_name') + ' | ' + inc_name
+
+                        last_inc = cachet.get_incident(i['component_id'])
+                        # Incident not registered
+                        if last_inc['status'] in ('-1', '4'):
+                            # TODO: added incident_date
+                            # incident_date = datetime.datetime.fromtimestamp(
+                            # int(trigger['lastchange'])).strftime('%d/%m/%Y %H:%M')
+                            cachet.new_incidents(name=inc_name, message=inc_msg, status=inc_status,
+                                                 component_id=i['component_id'], component_status=comp_status,
+                                                 notify=0)
+
+                        # Incident already registered
+                        elif last_inc['status'] not in ('-1', '4'):
+                            # Only incident message can change. So check if this have happened
+                            if last_inc['message'].strip() != inc_msg.strip():
+                                cachet.upd_incident(last_inc['id'], message=inc_msg, status=inc_status,
+                                                    component_status=comp_status)
+                        incident_service = True
+                        break
+                if not incident_service:
+                    if int(service['status']) >= 4:
+                        comp_status = 4
+                    elif int(service['status']) == 3:
+                        comp_status = 3
+                    else:
+                        comp_status = 2
+                    cachet.upd_components(i['component_id'], status=comp_status)
     return True
 
 
