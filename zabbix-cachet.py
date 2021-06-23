@@ -518,7 +518,7 @@ def triggers_watcher(service_map):
                     last_inc = cachet.get_incident(i['component_id'])
                     if str(last_inc['id']) != '0':
                         if resolving_tmpl:
-                            inc_msg = resolving_tmpl.format(time=datetime.datetime.now(tz=tz).strftime('%b %d, %H:%M'),
+                            inc_msg = resolving_tmpl.format(time=datetime.datetime.now(tz=tz).strftime('%H:%M'),
                                                             ) + cachet.get_incident(i['component_id'])['message']
                         else:
                             inc_msg = cachet.get_incident(i['component_id'])['message']
@@ -549,7 +549,7 @@ def triggers_watcher(service_map):
                         # TODO: Add timezone?
                         #       Move format to config file
                         author = msg.get('name', '') + ' ' + msg.get('surname', '')
-                        ack_time = datetime.datetime.fromtimestamp(int(msg['clock']), tz=tz).strftime('%b %d, %H:%M')
+                        ack_time = datetime.datetime.fromtimestamp(int(msg['clock']), tz=tz).strftime('%H:%M')
                         ack_msg = acknowledgement_tmpl.format(
                             message=msg['message'],
                             ack_time=ack_time,
@@ -569,7 +569,7 @@ def triggers_watcher(service_map):
                 if not inc_msg and investigating_tmpl:
                     if zbx_event:
                         zbx_event_clock = int(zbx_event.get('clock'))
-                        zbx_event_time = datetime.datetime.fromtimestamp(zbx_event_clock, tz=tz).strftime('%b %d, %H:%M')
+                        zbx_event_time = datetime.datetime.fromtimestamp(zbx_event_clock, tz=tz).strftime('%H:%M')
                     else:
                         zbx_event_time = ''
                     inc_msg = investigating_tmpl.format(
@@ -622,7 +622,7 @@ def triggers_watcher(service_map):
                     last_inc = cachet.get_incident(i['component_id'])
                     if str(last_inc['id']) != '0':
                         if resolving_tmpl:
-                            inc_msg = resolving_tmpl.format(time=datetime.datetime.now(tz=tz).strftime('%b %d, %H:%M'),
+                            inc_msg = resolving_tmpl.format(time=datetime.datetime.now(tz=tz).strftime('%H:%M'),
                                                             ) + cachet.get_incident(i['component_id'])['message']
                         else:
                             inc_msg = cachet.get_incident(i['component_id'])['message']
@@ -664,7 +664,7 @@ def triggers_watcher(service_map):
                                 # TODO: Add timezone?
                                 #       Move format to config file
                                 author = msg.get('name', '') + ' ' + msg.get('surname', '')
-                                ack_time = datetime.datetime.fromtimestamp(int(msg['clock']), tz=tz).strftime('%b %d, %H:%M')
+                                ack_time = datetime.datetime.fromtimestamp(int(msg['clock']), tz=tz).strftime('%H:%M')
                                 ack_msg = acknowledgement_tmpl.format(
                                     message=msg['message'],
                                     ack_time=ack_time,
@@ -686,7 +686,7 @@ def triggers_watcher(service_map):
                             if zbx_event:
                                 zbx_event_clock = int(zbx_event.get('clock'))
                                 zbx_event_time = datetime.datetime.fromtimestamp(zbx_event_clock, tz=tz).strftime(
-                                    '%b %d, %H:%M')
+                                    '%H:%M')
                             else:
                                 zbx_event_time = ''
                             inc_msg = investigating_tmpl.format(
