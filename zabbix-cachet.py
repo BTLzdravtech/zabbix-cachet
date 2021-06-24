@@ -476,8 +476,8 @@ class Cachet:
                         component_id, component_status
         @return: dict of data
         """
-        params = {'visible': 1, 'notify': 1}
         url = 'incidents'
+        params = {'visible': 1, 'notify': 0}
         params.update(kwargs)
         data = self._http_post(url, params)
         logging.info('Incident {name} (id={incident_id}) was created for component id {component_id}.'.format(
@@ -497,7 +497,8 @@ class Cachet:
         @return: boolean
         """
         url = 'incidents/' + str(id)
-        params = kwargs
+        params = {'notify': 0}
+        params.update(kwargs)
         data = self._http_put(url, params)
         logging.info('Incident ID {id} was updated. Status - {status}.'.format(
             id=id,
@@ -765,13 +766,19 @@ def create_or_update_inc(component, inc_name, inc_msg, inc_status, comp_status):
         # TODO: added incident_date
         # incident_date = datetime.datetime.fromtimestamp(
         # int(trigger['lastchange'])).strftime('%d/%m/%Y %H:%M')
-        cachet.new_incidents(
+        last_inc = cachet.new_incidents(
             name=inc_name,
             message=inc_msg,
             status=inc_status,
             component_id=component['component_id'],
+            component_status=comp_status
+        )
+        cachet.new_incident_update(
+            last_inc['id'],
+            status=inc_status,
+            component_id=component['component_id'],
             component_status=comp_status,
-            notify=0
+            message=inc_msg
         )
     # Incident already registered
     elif last_inc['status'] not in ('-1', '4'):
