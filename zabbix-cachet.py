@@ -666,11 +666,16 @@ def create_inc_resolve(component):
         else:
             inc_msg = 'Resolved'
             # inc_msg = last_inc['message']
+        cachet.upd_incident(
+            last_inc['id'],
+            message=inc_msg,
+            status=4,
+            component_id=component['component_id'],
+            component_status=1
+        )
         cachet.new_incident_update(
             last_inc['id'],
             status=4,
-            component_id=component['component_id'],
-            component_status=1,
             message=inc_msg
         )
         # cachet.upd_incident(
@@ -776,8 +781,6 @@ def create_or_update_inc(component, inc_name, inc_msg, inc_status, comp_status):
         cachet.new_incident_update(
             last_inc['id'],
             status=inc_status,
-            component_id=component['component_id'],
-            component_status=comp_status,
             message=inc_msg
         )
     # Incident already registered
@@ -794,8 +797,6 @@ def create_or_update_inc(component, inc_name, inc_msg, inc_status, comp_status):
             cachet.new_incident_update(
                 last_inc['id'],
                 status=inc_status,
-                component_id=component['component_id'],
-                component_status=comp_status,
                 message=inc_msg
             )
 
