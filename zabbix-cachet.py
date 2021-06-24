@@ -784,6 +784,13 @@ def create_or_update_inc(component, inc_name, inc_msg, inc_status, comp_status):
     elif last_inc['status'] not in ('-1', '4'):
         # Only incident message can change. So check if this have happened
         if last_inc['message'].strip() != inc_msg.strip():
+            cachet.upd_incident(
+                last_inc['id'],
+                message=inc_msg,
+                status=inc_status,
+                component_id=component['component_id'],
+                component_status=comp_status
+            )
             cachet.new_incident_update(
                 last_inc['id'],
                 status=inc_status,
@@ -791,13 +798,6 @@ def create_or_update_inc(component, inc_name, inc_msg, inc_status, comp_status):
                 component_status=comp_status,
                 message=inc_msg
             )
-            # cachet.upd_incident(
-            #     last_inc['id'],
-            #     message=inc_msg,
-            #     status=inc_status,
-            #     component_id=i['component_id'],
-            #     component_status=comp_status
-            # )
 
 
 def triggers_watcher_worker(service_map, interval, event):
